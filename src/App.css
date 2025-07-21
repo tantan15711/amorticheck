@@ -124,6 +124,30 @@ body {
   background: #c0392b;
 }
 
+.serial-btn {
+  background: #f39c12;
+}
+
+.serial-btn:hover {
+  background: #e67e22;
+}
+
+.serial-connect {
+  background: #16a085;
+}
+
+.serial-connect:hover {
+  background: #1abc9c;
+}
+
+.serial-disconnect {
+  background: #d35400;
+}
+
+.serial-disconnect:hover {
+  background: #e67e22;
+}
+
 .sensors-table-container {
   margin: 20px auto;
   width: 90%;
@@ -215,6 +239,10 @@ body {
 
 .controls {
   margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 .diagnostic-section {
@@ -312,6 +340,40 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.serial-controls {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.serial-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.serial-ports {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.serial-ports select {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 15px;
+  border-radius: 5px;
+  min-width: 200px;
+}
+
+.serial-ports select:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
 /* Animaciones */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-20px); }
@@ -358,6 +420,21 @@ body {
   .btn {
     padding: 10px 20px;
     font-size: 0.9rem;
+  }
+  
+  .serial-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .serial-ports {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .controls {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

@@ -16,6 +16,9 @@ const ControlPanel = ({
             {lecturaActiva ? '● Diagnóstico en curso' : 'Sistema en espera'}
           </span>
         )}
+        {estadoConexion.serialConectado && (
+          <span className="data-status"> ● Serial Conectado</span>
+        )}
       </div>
       
       <div className="controls">

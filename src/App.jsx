@@ -94,11 +94,13 @@ function App() {
     color: '#9E9E9E',
     icono: '❓',
   });
-  const [estadoConexion] = useState({
+  const [estadoConexion, setEstadoConexion] = useState({
     conectado: true,
     mensaje: 'Sistema listo',
+    serialConectado: false,
   });
-  const [error] = useState(null);
+  const [error,] = useState(null);
+  const [errorSerial, setErrorSerial] = useState(null);
   const [lecturaActiva, setLecturaActiva] = useState(false);
   const [mostrarSensores, setMostrarSensores] = useState(false);
   const [procesando, setProcesando] = useState(false);
@@ -106,6 +108,8 @@ function App() {
   const [datosFinales, setDatosFinales] = useState(null);
   const [pruebasRealizadas, setPruebasRealizadas] = useState([]);
   const [contadorDiagnosticos, setContadorDiagnosticos] = useState(0);
+  const [puertosDisponibles, setPuertosDisponibles] = useState([]);
+  const [puertoSeleccionado, setPuertoSeleccionado] = useState(null);
   
   const lecturaActivaRef = useRef(lecturaActiva);
   const intervaloRef = useRef(null);
@@ -114,6 +118,8 @@ function App() {
   const timeoutInicioSimRef = useRef(null);
   const valoresBaseRef = useRef(null);
   const pruebasIntervalRef = useRef(null);
+  const puertoSerialRef = useRef(null);
+  const lectorRef = useRef(null);
 
   // Inicializar datos de sensores según el tipo seleccionado
   useEffect(() => {
@@ -142,6 +148,7 @@ function App() {
   useEffect(() => {
     return () => {
       clearRefs();
+      desconectarSerial();
     };
   }, []);
 
@@ -158,6 +165,150 @@ function App() {
     timeoutFinalRef.current = null;
     timeoutInicioSimRef.current = null;
     pruebasIntervalRef.current = null;
+  };
+
+  // Detectar puertos seriales disponibles
+  const detectarPuertosSeriales = async () => {
+    try {
+      // Verificar si el navegador soporta Web Serial API
+      if (!('serial' in navigator)) {
+        setErrorSerial('API Serial no soportada en este navegador');
+        return;
+      }
+
+      // Solicitar puertos disponibles
+      const puertos = await navigator.serial.getPorts();
+      setPuertosDisponibles(puertos);
+      
+      if (puertos.length === 0) {
+        setErrorSerial('No se detectaron puertos seriales disponibles');
+      } else {
+        setErrorSerial(null);
+      }
+    } catch (err) {
+      setErrorSerial(`Error al detectar puertos: ${err.message}`);
+    }
+  };
+
+  // Conectar a un puerto serial
+  const conectarSerial = async () => {
+    try {
+      if (!puertoSeleccionado) {
+        setErrorSerial('Selecciona un puerto primero');
+        return;
+      }
+      
+      // Abrir el puerto serial
+      await puertoSeleccionado.open({ baudRate: 9600 });
+      puertoSerialRef.current = puertoSeleccionado;
+      
+      // Configurar lector
+      const lector = puertoSeleccionado.readable.getReader();
+      lectorRef.current = lector;
+      
+      setEstadoConexion({
+        conectado: true,
+        mensaje: 'Conectado a dispositivo serial',
+        serialConectado: true,
+      });
+      
+      setErrorSerial(null);
+      
+      // Leer datos del puerto serial continuamente
+      leerDatosSeriales();
+      
+    } catch (err) {
+      setErrorSerial(`Error al conectar: ${err.message}`);
+    }
+  };
+
+  // Desconectar puerto serial
+  const desconectarSerial = async () => {
+    try {
+      if (lectorRef.current) {
+        await lectorRef.current.cancel();
+        lectorRef.current = null;
+      }
+      
+      if (puertoSerialRef.current) {
+        await puertoSerialRef.current.close();
+        puertoSerialRef.current = null;
+      }
+      
+      setEstadoConexion({
+        conectado: true,
+        mensaje: 'Sistema listo',
+        serialConectado: false,
+      });
+      
+      setPuertoSeleccionado(null);
+      setErrorSerial(null);
+      
+    } catch (err) {
+      setErrorSerial(`Error al desconectar: ${err.message}`);
+    }
+  };
+
+  // Leer datos del puerto serial
+  const leerDatosSeriales = async () => {
+    if (!lectorRef.current) return;
+    
+    try {
+      while (lecturaActivaRef.current && lectorRef.current) {
+        const { value, done } = await lectorRef.current.read();
+        
+        if (done) {
+          // Lectura completada
+          lectorRef.current.releaseLock();
+          break;
+        }
+        
+        if (value) {
+          // Convertir Uint8Array a string
+          const texto = new TextDecoder().decode(value);
+          procesarDatosSeriales(texto);
+        }
+      }
+    } catch (err) {
+      setErrorSerial(`Error de lectura: ${err.message}`);
+    }
+  };
+
+  // Procesar datos recibidos del puerto serial
+  const procesarDatosSeriales = (texto) => {
+    try {
+      // Suponiendo que los datos vienen en formato JSON
+      const datos = JSON.parse(texto);
+      const tipo = TIPOS_AMORTIGUADORES.find(t => t.id === tipoAmortiguador);
+      
+      setDatosSensores(prev => {
+        const nuevosDatos = { ...prev };
+        
+        tipo.sensores.forEach(sensor => {
+          const clave = sensor.id;
+          const valor = datos[clave] || 0;
+          
+          if (valor !== undefined) {
+            const historial = [...(prev[clave]?.historial || []), valor].slice(-30);
+            const min = Math.min(prev[clave]?.min || Infinity, valor);
+            const max = Math.max(prev[clave]?.max || -Infinity, valor);
+            const promedio = historial.reduce((a, b) => a + b, 0) / historial.length;
+            
+            nuevosDatos[clave] = {
+              actual: +valor.toFixed(2),
+              historial,
+              min: +min.toFixed(2),
+              max: +max.toFixed(2),
+              promedio: +promedio.toFixed(2),
+            };
+          }
+        });
+        
+        return nuevosDatos;
+      });
+    } catch (err) {
+      console.error('Error procesando datos seriales:', err);
+    }
   };
 
   // Iniciar/detener la lectura
@@ -216,7 +367,11 @@ function App() {
           color: '#FF9800',
           icono: '⏳',
         });
-        iniciarSimulacion();
+        
+        // Si no hay conexión serial, iniciar simulación
+        if (!estadoConexion.serialConectado) {
+          iniciarSimulacion();
+        }
       }, delay);
 
       // Programar el diagnóstico final después de 30 segundos
@@ -524,6 +679,12 @@ function App() {
         </div>
       )}
       
+      {errorSerial && (
+        <div className="error-message">
+          ⚠️ {errorSerial}
+        </div>
+      )}
+      
       <div className="configuration-panel">
         <h3>Configuración del Diagnóstico</h3>
         
@@ -566,6 +727,54 @@ function App() {
             <li><strong>Presión de gas:</strong> {fabricanteActual.presionGas}</li>
             <li><strong>Ciclos de fatiga:</strong> {fabricanteActual.ciclosFatiga}</li>
           </ul>
+        </div>
+        
+        <div className="serial-controls">
+          <h4>Conexión Serial:</h4>
+          <div className="serial-buttons">
+            <button 
+              onClick={detectarPuertosSeriales} 
+              className="btn serial-btn"
+            >
+              🔍 Detectar Puertos
+            </button>
+            
+            {puertosDisponibles.length > 0 && (
+              <div className="serial-ports">
+                <label>Puertos detectados:</label>
+                <select
+                  value={puertoSeleccionado ? puertoSeleccionado.getInfo().usbVendorId : ''}
+                  onChange={(e) => {
+                    const port = puertosDisponibles.find(
+                      p => p.getInfo().usbVendorId === parseInt(e.target.value)
+                    );
+                    setPuertoSeleccionado(port);
+                  }}
+                >
+                  <option value="">Selecciona un puerto</option>
+                  {puertosDisponibles.map((port, index) => {
+                    const info = port.getInfo();
+                    return (
+                      <option 
+                        key={index} 
+                        value={info.usbVendorId}
+                      >
+                        {info.usbProductId ? `Puerto ${info.usbProductId}` : `Puerto ${index + 1}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+            
+            <button 
+              onClick={estadoConexion.serialConectado ? desconectarSerial : conectarSerial} 
+              className={`btn ${estadoConexion.serialConectado ? 'serial-disconnect' : 'serial-connect'}`}
+              disabled={!puertoSeleccionado && !estadoConexion.serialConectado}
+            >
+              {estadoConexion.serialConectado ? '❌ Desconectar Serial' : '🔌 Conectar Serial'}
+            </button>
+          </div>
         </div>
       </div>
       
