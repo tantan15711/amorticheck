@@ -1,6 +1,6 @@
 import React from 'react';
 
-const DiagnosticWidget = ({ diagnostico, generarReporte, procesando, porcentajeProgreso }) => {
+const DiagnosticWidget = ({ diagnostico, generarReporte, procesando, porcentajeProgreso, lecturaActiva }) => {
   return (
     <div className="diagnostic-widget" style={{ backgroundColor: `${diagnostico.color}22`, borderColor: diagnostico.color }}>
       <div className="diagnostic-header">
